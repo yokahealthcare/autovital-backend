@@ -1,0 +1,219 @@
+from datetime import datetime
+import os
+
+import MySQLdb
+import sqlalchemy as db
+import uuid
+import bcrypt
+from dotenv import load_dotenv
+
+# load env variables
+load_dotenv()
+
+ip_address = "127.0.0.1"
+port = "8000"
+
+# define which database that are going to be used
+engine = db.create_engine(f"mysql://root:@{ip_address}/autovital2")
+# established connection with database
+connection = engine.connect()
+metadata = db.MetaData()
+
+# template for response
+responses = {
+    "is_success": False,
+    "info": ""
+}
+
+
+def list_all_car():
+    """
+    loaded all car available on the database
+    Returns:
+        JSON containing car data
+    """
+
+    # define table
+    table_name = "car"
+    table = db.Table(table_name, metadata, autoload_with=engine)
+
+    # select all data from database
+    query = db.select(table)
+
+    try:
+        # execute query
+        result = connection.execute(query).fetchall()
+        # change to dictionary structure
+        ad = {key: (brand, model, thumbnail) for key, brand, model, thumbnail in result}
+
+        responses['is_success'] = True
+        responses['info'] = f"Success to load car from database"
+        responses['data'] = ad
+
+        return responses
+    except MySQLdb.IntegrityError:
+        # send response to main module
+        responses['is_success'] = False
+        responses['info'] = f"Failed to load car from database"
+
+        return responses
+
+
+def add_car(ncar: dict):
+    """
+    add new car to database
+    Returns:
+        JSON containing success status
+    """
+
+    # define table
+    table_name = ["automotive", "oil", "oil_filter", "fuel_filter", "air_filter", "breakpad"]
+    table_connection = []
+    for table in table_name:
+        temp = db.Table(table, metadata, autoload_with=engine)
+        table_connection.append(temp)
+    # make table connection convenient with dictionary
+    table = {key: val for key, val in zip(table_name, table_connection)}
+
+    # separate the 'data' key
+    values_dict = {key: val for key, val in ncar.items() if key != "data"}
+
+    # write to 'car' table
+    # generate a UUID for car id
+    # ex. 6e621909-a8c4-48ff-8ec8-b2eec48c49bd
+    unique_id = str(uuid.uuid4())
+    # inserting unique id to 'data' list to first index (front of list)
+    values_dict['aid'] = unique_id
+
+    query = db.insert(table["automotive"]).values(values_dict)
+
+    try:
+        # execute the query + commit (must present for inserting data)
+        connection.execute(query)
+        connection.commit()
+
+        # insert all component
+        id_name = ["oid", "ofid", "ffid", "afid", "bpid"]
+        for idx, cname in enumerate(table_name[1:]):
+            add_component(table[cname], unique_id, ncar['data'][cname], id_name[idx])
+
+        # send response to main module
+        responses['is_success'] = True
+        responses['info'] = f"Success inserting new car data"
+
+        return responses
+
+    except MySQLdb.IntegrityError:
+        # send response to main module
+        responses['is_success'] = False
+        responses['info'] = f"Failed inserting new data to database 'car'"
+
+        return responses
+
+
+def add_component(table: db.Table, aid: str, data: dict, id_name: str):
+    """
+    insert component to database
+    Returns:
+        JSON containing success status
+    """
+
+    # write to 'oil' table
+    # generate a UUID for user id
+    # ex. 6e621909-a8c4-48ff-8ec8-b2eec48c49bd
+    unique_id = str(uuid.uuid4())
+    # inserting unique id to 'data' list to first index (front of list)
+    data[id_name] = unique_id
+
+    # add column aid
+    data['aid'] = aid
+    # convert string to datetime object
+    data["last_change"] = datetime.strptime(data["last_change"], "%d/%m/%Y")
+    query = db.insert(table).values(data)
+
+    # execute
+    connection.execute(query)
+    connection.commit()
+
+
+def load_car(automotive_id: str):
+    """
+    load selected automotive id
+    Returns:
+        JSON containing automotive data
+    """
+
+    # define table
+    table_name = ["automotive", "oil", "oil_filter", "fuel_filter", "air_filter", "breakpad"]
+    table_connection = []
+    for table in table_name:
+        temp = db.Table(table, metadata, autoload_with=engine)
+        table_connection.append(temp)
+    # make table connection convenient with dictionary
+    table = {key: val for key, val in zip(table_name, table_connection)}
+
+    # select all data from database
+    query = db.select(table["automotive"])
+
+    try:
+        # execute query
+        result = connection.execute(query).fetchall()
+        # make dictionary same as the request add new car structure
+        result = {key: value for key, value in zip(table["automotive"].columns.keys(), result[0])}
+
+        # load all components
+        # define keys that we use (all components have the same key/column value)
+        keys = ["compid", "name", "last_change"]
+        oil = load_component(table["oil"], result["aid"])[0][:-1]
+        oil = {key: value for key, value in zip(keys, oil)}
+
+        oil_filter = load_component(table["oil_filter"], result["aid"])[0][:-1]
+        oil_filter = {key: value for key, value in zip(keys, oil_filter)}
+
+        fuel_filter = load_component(table["fuel_filter"], result["aid"])[0][:-1]
+        fuel_filter = {key: value for key, value in zip(keys, fuel_filter)}
+
+        air_filter = load_component(table["air_filter"], result["aid"])[0][:-1]
+        air_filter = {key: value for key, value in zip(keys, air_filter)}
+
+        breakpad = load_component(table["breakpad"], result["aid"])[0][:-1]
+        breakpad = {key: value for key, value in zip(keys, breakpad)}
+        tmp = {
+            "oil": oil,
+            "oil_filter": oil_filter,
+            "fuel_filter": fuel_filter,
+            "air_filter": air_filter,
+            "breakpad": breakpad
+        }
+        # append dictionary of components to 'result' variable
+        result["data"] = tmp
+
+        responses['is_success'] = True
+        responses['info'] = f"Success to load car from database"
+        responses['data'] = result
+
+        return responses
+    except MySQLdb.IntegrityError:
+        # send response to main module
+        responses['is_success'] = False
+        responses['info'] = f"Failed to load car from database"
+
+        return responses
+
+
+def load_component(table: db.Table, automotive_id: str):
+    """
+    insert component to database
+    Returns:
+        JSON containing success status
+    """
+
+    # select all component from table
+    query = db.select(table).where(table.c.aid == automotive_id)
+
+    # execute
+    return connection.execute(query).fetchall()
+
+
+if __name__ == "__main__":
+    pass
