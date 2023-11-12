@@ -17,6 +17,7 @@ async def add_car(request: schemas.AddCar):
         "vin": request.vin,
         "distance": request.distance,
         "cid": request.cid,
+        "uid": request.uid,
         "data": request.data
     }
     # make request to database
@@ -70,6 +71,22 @@ async def edit_car():
     pass
 
 
-@router.post("/delete")
-async def delete_car():
-    pass
+@router.get("/delete")
+async def delete_car(automotive_id: str):
+    # make request to database
+    operation = db.delete_car(automotive_id)
+
+    if operation['is_success']:
+        res = {
+            "is_success": True,
+            "info": "Deletion automotive data successfully",
+            "detail": f"{operation['info']}",
+        }
+        return res
+    else:
+        res = {
+            "is_success": False,
+            "info": f"Deletion automotive data failed to load",
+            "detail": f"{operation['info']}"
+        }
+        return res

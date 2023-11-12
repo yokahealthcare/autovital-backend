@@ -215,5 +215,61 @@ def load_component(table: db.Table, automotive_id: str):
     return connection.execute(query).fetchall()
 
 
+def delete_car(automotive_id: str):
+    """
+    delete car from database
+    Returns:
+        JSON containing success status
+    """
+
+    # define table
+    table_name = ["automotive", "oil", "oil_filter", "fuel_filter", "air_filter", "breakpad"]
+    table_connection = []
+    for table in table_name:
+        temp = db.Table(table, metadata, autoload_with=engine)
+        table_connection.append(temp)
+    # make table connection convenient with dictionary
+    table = {key: val for key, val in zip(table_name, table_connection)}
+
+    try:
+
+        # delete all component - first
+        for idx, cname in enumerate(table_name[1:]):
+            delete_component(table[cname], automotive_id)
+
+        # delete the automotive data - second
+        query = db.delete(table["automotive"]).where(table["automotive"].c.aid == automotive_id)
+        # execute the query + commit (must present for inserting data)
+        connection.execute(query)
+        connection.commit()
+
+        # send response to main module
+        responses['is_success'] = True
+        responses['info'] = f"Success delete automotive data"
+
+        return responses
+
+    except MySQLdb.IntegrityError:
+        # send response to main module
+        responses['is_success'] = False
+        responses['info'] = f"Failed delete automotive data"
+
+        return responses
+
+
+def delete_component(table: db.Table, automotive_id: str):
+    """
+        delete component to database
+        Returns:
+            JSON containing success status
+        """
+
+    # delete component from table certain aid
+    query = db.delete(table).where(table.c.aid == automotive_id)
+
+    # execute
+    connection.execute(query)
+
+
 if __name__ == "__main__":
     pass

@@ -9,6 +9,7 @@ class AddCar(BaseModel):
     vin: str
     distance: int
     cid: str
+    uid: str
     data: dict
 
 
