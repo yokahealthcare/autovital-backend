@@ -161,32 +161,27 @@ def load_car(automotive_id: str):
         # make dictionary same as the request add new car structure
         result = {key: value for key, value in zip(table["automotive"].columns.keys(), result[0])}
 
-        # load all components
-        # define keys that we use (all components have the same key/column value)
-        keys = ["compid", "name", "last_change"]
-        oil = load_component(table["oil"], result["aid"])[0][:-1]
-        oil = {key: value for key, value in zip(keys, oil)}
-
-        oil_filter = load_component(table["oil_filter"], result["aid"])[0][:-1]
-        oil_filter = {key: value for key, value in zip(keys, oil_filter)}
-
-        fuel_filter = load_component(table["fuel_filter"], result["aid"])[0][:-1]
-        fuel_filter = {key: value for key, value in zip(keys, fuel_filter)}
-
-        air_filter = load_component(table["air_filter"], result["aid"])[0][:-1]
-        air_filter = {key: value for key, value in zip(keys, air_filter)}
-
-        breakpad = load_component(table["breakpad"], result["aid"])[0][:-1]
-        breakpad = {key: value for key, value in zip(keys, breakpad)}
-        tmp = {
-            "oil": oil,
-            "oil_filter": oil_filter,
-            "fuel_filter": fuel_filter,
-            "air_filter": air_filter,
-            "breakpad": breakpad
+        # load components
+        # Define the components and their corresponding table names
+        component_tables = {
+            "oil": table["oil"],
+            "oil_filter": table["oil_filter"],
+            "fuel_filter": table["fuel_filter"],
+            "air_filter": table["air_filter"],
+            "breakpad": table["breakpad"]
         }
-        # append dictionary of components to 'result' variable
-        result["data"] = tmp
+
+        # Define keys used for all components
+        keys = ["compid", "name", "last_change"]
+
+        # Load each component and create a dictionary for each
+        components_data = {}
+        for component_name, component_table in component_tables.items():
+            component_data = load_component(component_table, result["aid"])[0][:-1]
+            components_data[component_name] = {key: value for key, value in zip(keys, component_data)}
+
+        # Append the dictionary of components to the 'result' variable
+        result["data"] = components_data
 
         responses['is_success'] = True
         responses['info'] = f"Success to load car from database"

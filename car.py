@@ -71,7 +71,7 @@ async def edit_car():
     pass
 
 
-@router.get("/delete")
+@router.delete("/delete")
 async def delete_car(automotive_id: str):
     # make request to database
     operation = db.delete_car(automotive_id)
